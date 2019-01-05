@@ -43,7 +43,7 @@ def index(request):
     return response.redirect(REDIRECT_URL)
 
 
-@app.route("/logs", methods=["POST"])
+@app.route("/submit", methods=["POST"])
 async def submit_logs(request):
     logs_file = request.files.get("logs")
     print(logs_file.type)
