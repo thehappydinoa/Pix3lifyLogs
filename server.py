@@ -48,7 +48,7 @@ async def submit_logs(request):
     logs_file = request.files.get("logs")
     print(logs_file.type)
     key = str(uuid4())
-    if len(zip_content) < 500000:
+    if len(logs_file.body) < 500000:
         app.add_task(save_logs(logs_file.body, key))
         return response.json({
             "key": key,
