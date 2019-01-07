@@ -1,8 +1,9 @@
 import os
+import tarfile
+import zipfile
 from io import BytesIO
 from time import sleep
 from uuid import uuid4
-from zipfile import BadZipfile, ZipFile
 
 import boto3
 
@@ -17,25 +18,44 @@ bucket = s3.Bucket("pix3lify-logs")
 REDIRECT_URL = os.getenv(
     "REDIRECT_URL", "https://github.com/Magisk-Modules-Repo/Pix3lify")
 
+GOOD_EXT = [".log", ".txt", ".xml", ".prop"]
+BAD_EXT = ["__MACOSX", "._"]
+
+EXTRA_ARGS = {"ACL": "public-read"}
+
 
 class BadExtensionException(Exception):
     pass
 
 
-async def save_logs(zip_content, folder):
-    zip_file = "logs/" + folder + ".zip"
+def good_filename(filename):
+    return any(ext in filename for ext in GOOD_EXT) and not any(ext in filename for ext in BAD_EXT)
+
+
+async def save_zip(content, folder):
     try:
-        open(zip_file, "wb").write(zip_content)
-        zip = ZipFile(zip_file, "r")
+        zip = zipfile.ZipFile(BytesIO(content), "r")
         for filename in zip.namelist():
-            if any(ext in filename for ext in [".log", ".txt", ".xml", ".prop"]) and not any(ext in filename for ext in ["__MACOSX"]):
+            if good_filename(filename):
                 print("Uploading " + filename)
                 bucket.upload_fileobj(BytesIO(zip.read(
-                    filename)), "/".join([folder, filename]), ExtraArgs={'ACL': 'public-read'})
-    except BadZipfile:
-        print("Bad Zipfile")
-    finally:
-        os.remove(zip_file)
+                    filename)), "/".join([folder, filename]), ExtraArgs=EXTRA_ARGS)
+                print("Uploaded " + filename)
+    except zipfile.BadZipfile:
+        print("Bad .zip")
+
+
+async def save_tar(content, folder):
+    try:
+        tar = tarfile.open(fileobj=BytesIO(content), mode="r")
+        for member in tar.getmembers():
+            if good_filename(member.name):
+                print("Uploading " + member.name)
+                bucket.upload_fileobj(BytesIO(member.tobuf(
+                )), "/".join([folder, member.name]), ExtraArgs=EXTRA_ARGS)
+                print("Uploaded " + member.name)
+    except tarfile.TarError:
+        print("Bad .tar.xz")
 
 
 @app.route("/")
@@ -46,15 +66,18 @@ def index(request):
 @app.route("/submit", methods=["POST"])
 async def submit_logs(request):
     logs_file = request.files.get("logs")
-    print(logs_file.type)
     key = str(uuid4())
     if len(logs_file.body) < 500000:
-        app.add_task(save_logs(logs_file.body, key))
-        return response.json({
-            "key": key,
-        })
+        if ".zip" in logs_file.name:
+            app.add_task(save_zip(logs_file.body, key))
+        else:
+            app.add_task(save_tar(logs_file.body, key))
+        return response.text(key)
+        # return response.json({
+        #     "key": key,
+        # })
     return response.text("Failed zip file too large")
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)),
             workers=int(os.getenv("WORKERS", 1)), auto_reload=True)
