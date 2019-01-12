@@ -66,17 +66,21 @@ def index(request):
 @app.route("/submit", methods=["POST"])
 async def submit_logs(request):
     logs_file = request.files.get("logs")
+    if not logs_file:
+        return response.text("Failed to fetch 'logs'",
+                             status=406)
     key = str(uuid4())
     if len(logs_file.body) < 500000:
         if ".zip" in logs_file.name:
             app.add_task(save_zip(logs_file.body, key))
-        else:
+        elif ".tar.xz" in logs_file.name:
             app.add_task(save_tar(logs_file.body, key))
+        else:
+            return response.text("Invalid file type",
+                                 status=415)
         return response.text(key)
-        # return response.json({
-        #     "key": key,
-        # })
-    return response.text("Failed zip file too large")
+    return response.text("Failed zip file too large",
+                         status=406)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)),
