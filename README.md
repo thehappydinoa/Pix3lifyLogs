@@ -6,13 +6,15 @@ Anonymous log sharing for Heroku
 
 Virtualenv Setup
 
-```bash
-virtualenv venv -p python3
-```
+    virtualenv venv -p python3
 
 Install Requirements and Run
 
-```bash
-pip install -r requirements.txt
-python server.py
-```
+    pip install -r requirements.txt
+    python server.py
+
+## Uploading
+
+    curl -T logs.tar.xz http://logs.pix3lify.com/submit
+    # OR
+    curl -F logs=@logs.tar.xz http://logs.pix3lify.com/submit

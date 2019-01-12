@@ -1,8 +1,8 @@
+#!/usr/bin/env python
 import os
 import tarfile
-import zipfile
+# import zipfile
 from io import BytesIO
-from time import sleep
 from uuid import uuid4
 
 import boto3
@@ -15,34 +15,27 @@ s3 = boto3.resource("s3")
 bucket = s3.Bucket("pix3lify-logs")
 
 
-REDIRECT_URL = os.getenv(
-    "REDIRECT_URL", "https://github.com/Magisk-Modules-Repo/Pix3lify")
-
 GOOD_EXT = [".log", ".txt", ".xml", ".prop"]
 BAD_EXT = ["__MACOSX", "._"]
 
 EXTRA_ARGS = {"ACL": "public-read"}
 
 
-class BadExtensionException(Exception):
-    pass
-
-
 def good_filename(filename):
     return any(ext in filename for ext in GOOD_EXT) and not any(ext in filename for ext in BAD_EXT)
 
 
-async def save_zip(content, folder):
-    try:
-        zip = zipfile.ZipFile(BytesIO(content), "r")
-        for filename in zip.namelist():
-            if good_filename(filename):
-                print("Uploading " + filename)
-                bucket.upload_fileobj(BytesIO(zip.read(
-                    filename)), "/".join([folder, filename]), ExtraArgs=EXTRA_ARGS)
-                print("Uploaded " + filename)
-    except zipfile.BadZipfile:
-        print("Bad .zip")
+# async def save_zip(content, folder):
+#     try:
+#         zip = zipfile.ZipFile(BytesIO(content), "r")
+#         for filename in zip.namelist():
+#             if good_filename(filename):
+#                 print("Uploading " + filename)
+#                 bucket.upload_fileobj(BytesIO(zip.read(
+#                     filename)), "/".join([folder, filename]), ExtraArgs=EXTRA_ARGS)
+#                 print("Uploaded " + filename)
+#     except zipfile.BadZipfile:
+#         print("Bad .zip")
 
 
 async def save_tar(content, folder):
@@ -60,26 +53,22 @@ async def save_tar(content, folder):
 
 @app.route("/")
 def index(request):
-    return response.redirect(REDIRECT_URL)
+    return response.redirect(os.getenv("REDIRECT_URL",
+                                       "https://github.com/Magisk-Modules-Repo/Pix3lify"))
 
 
-@app.route("/submit", methods=["POST"])
+@app.route("/submit", methods=["POST", "PUT"])
 async def submit_logs(request):
     logs_file = request.files.get("logs")
-    if not logs_file:
-        return response.text("Failed to fetch 'logs'",
-                             status=406)
+    if logs_file:
+        body = logs_file.body
+    else:
+        body = request.body
     key = str(uuid4())
-    if len(logs_file.body) < 500000:
-        if ".zip" in logs_file.name:
-            app.add_task(save_zip(logs_file.body, key))
-        elif ".tar.xz" in logs_file.name:
-            app.add_task(save_tar(logs_file.body, key))
-        else:
-            return response.text("Invalid file type",
-                                 status=415)
+    if len(body) < 500000:
+        app.add_task(save_tar(body, key))
         return response.text(key)
-    return response.text("Failed zip file too large",
+    return response.text("Failed .tar.xz file too large",
                          status=406)
 
 if __name__ == "__main__":
