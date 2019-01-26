@@ -44,8 +44,7 @@ async def save_tar(content, folder):
         for member in tar.getmembers():
             if good_filename(member.name):
                 print("Uploading " + member.name)
-                bucket.upload_fileobj(BytesIO(member.tobuf(
-                )), "/".join([folder, member.name]), ExtraArgs=EXTRA_ARGS)
+                bucket.upload_fileobj(tar.extractfile(member), "/".join([folder, member.name]), ExtraArgs=EXTRA_ARGS)
                 print("Uploaded " + member.name)
     except tarfile.TarError:
         print("Bad .tar.xz")
